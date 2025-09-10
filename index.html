@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Password Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: #0f172a;
+      overflow: hidden;
+    }
+    .background-circle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60vmin;
+      height: 60vmin;
+      border-radius: 50%;
+      filter: blur(120px);
+      animation: pulse 3s ease-in-out infinite, colorShift 6s linear infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.2); }
+    }
+    @keyframes colorShift {
+      0% { background: rgba(34,197,94,0.6); }   /* green */
+      33% { background: rgba(168,85,247,0.6); } /* purple */
+      66% { background: rgba(59,130,246,0.6); } /* blue */
+      100% { background: rgba(34,197,94,0.6); }
+    }
+    .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); position: relative; z-index: 10; }
+    input[type=range]::-webkit-slider-thumb{appearance:none;width:16px;height:16px;border-radius:50%;background:#10b981;cursor:pointer;}
+    .fadeIn { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from{opacity:0; transform: translateY(5px);} to{opacity:1; transform: translateY(0);} }
+    .slideIn { animation: slideIn 0.4s ease; }
+    @keyframes slideIn { from {opacity:0; transform:translateY(-10px);} to {opacity:1; transform:translateY(0);} }
+    .glow-green { box-shadow: 0 0 12px rgba(34,197,94,0.6), 0 0 24px rgba(34,197,94,0.4); }
+    .glow-purple { box-shadow: 0 0 12px rgba(168,85,247,0.6), 0 0 24px rgba(168,85,247,0.4); }
+    .neon-output { text-shadow: 0 0 6px rgba(59,130,246,0.8), 0 0 12px rgba(59,130,246,0.6); }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 text-slate-100 font-sans relative">
+  <!-- Animated Background Circle -->
+  <div class="background-circle"></div>
+
+  <main class="w-full max-w-md glass rounded-xl p-6 shadow-lg border border-white/10 space-y-6">
+    <header class="text-center space-y-2">
+      <h1 class="text-xl font-semibold">Password Generator</h1>
+      <p class="text-xs text-slate-300">Secure • Minimal • Pro</p>
+    </header>
+
+    <!-- Password Box -->
+    <div class="space-y-1">
+      <div id="passwordBox" class="bg-slate-900/50 rounded-2xl p-4 flex items-center justify-between gap-2 shadow-lg slideIn relative">
+        <input id="passwordOutput" readonly class="flex-1 bg-transparent text-base font-mono outline-none truncate neon-output" value="Click Generate to start"/>
+        <div class="flex gap-2">
+          <button id="generateBtn" type="button" class="px-3 py-2 rounded-xl bg-green-500 text-white font-semibold shadow hover:scale-105 hover:bg-green-600 transition-transform glow-green">Generate</button>
+          <button id="copyBtn" type="button" class="px-3 py-2 rounded-xl bg-purple-500 text-white font-semibold shadow hover:scale-105 hover:bg-purple-600 transition-transform glow-purple">Copy</button>
+        </div>
+      </div>
+      <p id="charCount" class="text-xs text-slate-400 text-right pr-1">Length: 0</p>
+    </div>
+
+    <section class="space-y-4">
+      <label class="block">
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>Password Strength</span>
+          <span id="strengthLabel" class="font-medium text-slate-200">Medium</span>
+        </div>
+        <input id="strength" type="range" min="1" max="5" value="3" class="w-full accent-green-400" />
+      </label>
+
+      <div class="flex flex-wrap gap-3 text-xs justify-center">
+        <label class="flex items-center gap-1"><input id="useUpper" type="checkbox" checked> Uppercase</label>
+        <label class="flex items-center gap-1"><input id="useNumbers" type="checkbox" checked> Numbers</label>
+        <label class="flex items-center gap-1"><input id="useSymbols" type="checkbox" checked> Symbols</label>
+        <label class="flex items-center gap-1"><input id="useDashes" type="checkbox"> Dashes</label>
+      </div>
+
+      <div id="toast" class="hidden fixed bottom-4 right-4 bg-slate-800 text-slate-100 px-4 py-2 rounded-lg shadow-lg text-sm fadeIn"></div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400">Made with 💙 by <a href="https://GitHub.com/F2Codes/" target="_blank" class="underline hover:text-slate-200">Codeman(F2)</a></footer>
+  </main>
+
+  <script>
+  const LOWER = 'abcdefghijklmnopqrstuvwxyz';
+  const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const NUMS = '0123456789';
+  const SYMBOLS = "!@#$%^&*()_+~`|}{[]:;?,./-=\\";
+
+  const strength = document.getElementById('strength');
+  const strengthLabel = document.getElementById('strengthLabel');
+  const generateBtn = document.getElementById('generateBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const out = document.getElementById('passwordOutput');
+  const toast = document.getElementById('toast');
+  const charCount = document.getElementById('charCount');
+
+  const useUpper = document.getElementById('useUpper');
+  const useNumbers = document.getElementById('useNumbers');
+  const useSymbols = document.getElementById('useSymbols');
+  const useDashes = document.getElementById('useDashes');
+
+  function sliderSettings(level){
+    const settings = {
+      1: {len:8,  chars:[LOWER]},
+      2: {len:10, chars:[LOWER, NUMS]},
+      3: {len:14, chars:[LOWER, UPPER, NUMS]},
+      4: {len:18, chars:[LOWER, UPPER, NUMS, SYMBOLS]},
+      5: {len:24, chars:[LOWER, UPPER, NUMS, SYMBOLS]}
+    };
+    return settings[level] || settings[3];
+  }
+
+  function updateStrengthLabel(){
+    const v = +strength.value;
+    const labels = ['Very Weak','Weak','Medium','Strong','Very Strong'];
+    strengthLabel.textContent = labels[v-1] || 'Medium';
+  }
+
+  strength.addEventListener('input', ()=> updateStrengthLabel());
+
+  function secureLocalPassword(len, allowed){
+    const charset = allowed.join('');
+    const arr = new Uint32Array(len);
+    window.crypto.getRandomValues(arr);
+    let pass = '';
+    for(let i=0;i<len;i++){
+      pass += charset[arr[i] % charset.length];
+    }
+    return pass;
+  }
+
+  async function generatePassword(){
+    const lvl = +strength.value;
+    const s = sliderSettings(lvl);
+    let allowedSets = [LOWER];
+    if(useUpper.checked) allowedSets.push(UPPER);
+    if(useNumbers.checked) allowedSets.push(NUMS);
+    if(useSymbols.checked) allowedSets.push(SYMBOLS);
+    if(useDashes.checked) allowedSets.push('-_');
+
+    const len = Math.max(6, s.len);
+
+    let password = '';
+    for(const set of allowedSets){
+      const idx = crypto.getRandomValues(new Uint32Array(1))[0] % set.length;
+      password += set[idx];
+    }
+    const remaining = len - password.length;
+    password += secureLocalPassword(remaining, allowedSets);
+
+    password = password.split('');
+    for(let i = password.length -1; i>0; i--){
+      const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i+1);
+      [password[i], password[j]] = [password[j], password[i]];
+    }
+    return password.join('');
+  }
+
+  function showToast(message){
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    toast.classList.add('slideIn');
+    setTimeout(()=>{ toast.classList.add('hidden'); toast.classList.remove('slideIn'); },1500);
+  }
+
+  function updateCharCount(){
+    const length = out.value.length;
+    if(length > 0 && out.value !== 'Click Generate to start' && out.value !== 'Error'){
+      charCount.textContent = `Length: ${length}`;
+    } else {
+      charCount.textContent = 'Length: 0';
+    }
+  }
+
+  generateBtn.addEventListener('click', async ()=>{
+    generateBtn.disabled = true;
+    generateBtn.textContent = '...';
+    try{
+      const pw = await generatePassword();
+      out.value = pw;
+      updateCharCount();
+      document.getElementById('passwordBox').classList.add('slideIn');
+      setTimeout(()=> document.getElementById('passwordBox').classList.remove('slideIn'),500);
+    }catch(e){
+      out.value = 'Error';
+      updateCharCount();
+    }finally{
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate';
+    }
+  });
+
+  copyBtn.addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(out.value || '');
+      showToast('✅ Password Copied!');
+    }catch(e){
+      out.select();
+      document.execCommand('copy');
+      showToast('✅ Password Copied!');
+    }
+    updateCharCount();
+  });
+
+  updateStrengthLabel();
+  updateCharCount();
+  </script>
+</body>
+</html>
